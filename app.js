@@ -3,12 +3,149 @@ import { createElement } from './utils/createComponent.js';
 import { fetchUsers, fetchTodos, fetchPosts, fetchComments } from './utils/api.js';
 import { debounce } from './utils/debounce.js';
 import { getLocalUsers, addUser, deleteUser } from './utils/localStore.js';
+import { renderBreadcrumbs } from './components/Breadcrumbs.js'; 
 
 const appRoot = document.getElementById('app');
 
-function renderTodos(queryString) { appRoot.innerHTML = '<h2>Todos (TBD)</h2>'; }
-function renderPosts(queryString) { appRoot.innerHTML = '<h2>Посты (TBD)</h2>'; }
-function renderComments(queryString) { appRoot.innerHTML = '<h2>Комментарии (TBD)</h2>'; }
+
+async function renderTodos(queryString) {
+    const rawTodos = await fetchTodos();
+    const localUsers = getLocalUsers();
+    
+    const localTodos = localUsers.flatMap(user => 
+        (user.todos || []).map(todo => ({
+            ...todo, 
+            userId: user.id, 
+            title: `[LOCAL] ${todo.title}`,
+            id: todo.id 
+        }))
+    );
+    const allTodos = [...rawTodos, ...localTodos]; 
+    let todos = allTodos;
+    
+    const todoListContainer = createElement('div', { class: 'todo-list' });
+
+    const handleSearchInput = (event) => {
+        const searchTerm = event.target.value.toLowerCase();
+        todos = allTodos.filter(todo => 
+            todo.title.toLowerCase().includes(searchTerm)
+        );
+        renderTodoList(todos);
+    };
+    const searchInput = createElement('input', { 
+        type: 'text', 
+        placeholder: 'Искать по title...',
+        oninput: debounce(handleSearchInput, 300)
+    });
+
+    const renderTodoList = (data) => {
+        todoListContainer.innerHTML = '';
+        data.forEach(todo => {
+            const status = todo.completed ? 'completed' : 'pending';
+            const todoItem = createElement('div', { class: `todo-item ${status}` }, [
+                createElement('p', {}, [todo.title]),
+                createElement('span', {}, [status])
+            ]);
+            todoListContainer.appendChild(todoItem);
+        });
+    };
+    
+    appRoot.appendChild(createElement('div', { class: 'header-controls' }, [
+        createElement('h1', {}, ['Все Todos']),
+        searchInput
+    ]));
+    appRoot.appendChild(todoListContainer);
+    renderTodoList(todos);
+}
+
+async function renderPosts(queryString) {
+    const params = new URLSearchParams(queryString);
+    const userId = params.get('userId');
+    const title = userId ? `Посты пользователя ${userId}` : 'Все посты';
+    
+    const rawPosts = await fetchPosts(userId);
+    let posts = rawPosts;
+
+    const postListContainer = createElement('div', { class: 'post-list' });
+
+    const handleSearchInput = (event) => {
+        const searchTerm = event.target.value.toLowerCase();
+        posts = rawPosts.filter(post => 
+            post.title.toLowerCase().includes(searchTerm) || 
+            post.body.toLowerCase().includes(searchTerm)
+        );
+        renderPostList(posts);
+    };
+    const searchInput = createElement('input', { 
+        type: 'text', 
+        placeholder: 'Искать по title или body...',
+        oninput: debounce(handleSearchInput, 300)
+    });
+    
+    const renderPostList = (data) => {
+        postListContainer.innerHTML = '';
+        data.forEach(post => {
+            const postCard = createElement('div', { class: 'post-card' }, [
+                createElement('h3', { 
+                    onclick: () => window.location.hash = `#users#posts#comments?postId=${post.id}` 
+                }, [post.title]),
+                createElement('p', {}, [post.body])
+            ]);
+            postListContainer.appendChild(postCard);
+        });
+    };
+
+    appRoot.appendChild(createElement('div', { class: 'header-controls' }, [
+        createElement('h1', {}, [title]),
+        searchInput
+    ]));
+    appRoot.appendChild(postListContainer);
+    renderPostList(posts);
+}
+
+
+async function renderComments(queryString) {
+    const params = new URLSearchParams(queryString);
+    const postId = params.get('postId');
+    const title = postId ? `Комментарии к посту ${postId}` : 'Все комментарии';
+    
+    const rawComments = await fetchComments(postId);
+    let comments = rawComments;
+
+    const commentListContainer = createElement('div', { class: 'comment-list' });
+
+    const handleSearchInput = (event) => {
+        const searchTerm = event.target.value.toLowerCase();
+        comments = rawComments.filter(comment => 
+            comment.name.toLowerCase().includes(searchTerm) || 
+            comment.body.toLowerCase().includes(searchTerm)
+        );
+        renderCommentList(comments);
+    };
+    const searchInput = createElement('input', { 
+        type: 'text', 
+        placeholder: 'Искать по name или body...',
+        oninput: debounce(handleSearchInput, 300)
+    });
+
+    const renderCommentList = (data) => {
+        commentListContainer.innerHTML = '';
+        data.forEach(comment => {
+            const commentCard = createElement('div', { class: 'comment-card' }, [
+                createElement('h4', {}, [comment.name]),
+                createElement('p', {}, [comment.body])
+            ]);
+            commentListContainer.appendChild(commentCard);
+        });
+    };
+    
+    appRoot.appendChild(createElement('div', { class: 'header-controls' }, [
+        createElement('h1', {}, [title]),
+        searchInput
+    ]));
+    appRoot.appendChild(commentListContainer);
+    renderCommentList(comments);
+}
 
 
 const routeHandlers = {
@@ -24,7 +161,9 @@ function handleRouting() {
     const handler = routeHandlers[hash];
 
     if (handler) {
-        appRoot.innerHTML = ''; 
+        appRoot.innerHTML = '';
+        const breadcrumbs = renderBreadcrumbs(hash);
+        appRoot.appendChild(breadcrumbs);
         handler(queryString); 
     } else {
         appRoot.innerHTML = '<h2>404</h2><p>Перейдите на <a href="#users">#users</a></p>';
