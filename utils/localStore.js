@@ -25,3 +25,41 @@ export function deleteUser(userId) {
     users = users.filter(user => user.id !== userId);
     saveLocalUsers(users);
 }
+
+export function addTodo(userId, todoTitle) {
+    const users = getLocalUsers();
+    const userIndex = users.findIndex(u => u.id === userId);
+
+    if (userIndex !== -1) {
+        const user = users[userIndex];
+        const maxId = Math.max(0, ...user.todos.map(t => t.id || 0)) + 1; 
+
+        const newTodo = {
+            id: maxId,
+            title: todoTitle,
+            completed: false 
+        };
+
+        user.todos.push(newTodo);
+        saveLocalUsers(users);
+        return newTodo;
+    }
+    return null;
+}
+
+export function toggleTodoStatus(userId, todoId) {
+    const users = getLocalUsers();
+    const userIndex = users.findIndex(u => u.id === userId);
+
+    if (userIndex !== -1) {
+        const user = users[userIndex];
+        const todo = user.todos.find(t => t.id === todoId);
+
+        if (todo) {
+            todo.completed = !todo.completed; 
+            saveLocalUsers(users); 
+            return true;
+        }
+    }
+    return false;
+}

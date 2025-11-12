@@ -10,6 +10,8 @@ export async function fetchTodos() {
     return response.json();
 }
 
+///////////////////////////////////////////////////
+
 export async function fetchPosts(userId) {
     const url = userId ? `${BASE_URL}/posts?userId=${userId}` : `${BASE_URL}/posts`;
     const response = await fetch(url);

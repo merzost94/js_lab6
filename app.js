@@ -2,12 +2,12 @@ import { ROUTES } from './data/routes.js';
 import { createElement } from './utils/createComponent.js';
 import { fetchUsers, fetchTodos, fetchPosts, fetchComments } from './utils/api.js';
 import { debounce } from './utils/debounce.js';
-import { getLocalUsers, addUser, deleteUser } from './utils/localStore.js';
+import { getLocalUsers, addUser, deleteUser, addTodo, toggleTodoStatus } from './utils/localStore.js';
 import { renderBreadcrumbs } from './components/Breadcrumbs.js'; 
 
 const appRoot = document.getElementById('app');
 
-
+//////////////////////////////////////////////
 async function renderTodos(queryString) {
     const rawTodos = await fetchTodos();
     const localUsers = getLocalUsers();
@@ -23,6 +23,29 @@ async function renderTodos(queryString) {
     const allTodos = [...rawTodos, ...localTodos]; 
     let todos = allTodos;
     
+    const localUser = localUsers.find(u => u.id.startsWith('local-'));
+    let form = null;
+    
+    if (localUser) {
+        form = createElement('form', { 
+            onsubmit: (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const newTitle = formData.get('title');
+                
+                if (newTitle) {
+                    addTodo(localUser.id, newTitle); 
+                    handleRouting(); 
+                }
+            }
+        }, [
+            createElement('input', { type: 'text', name: 'title', placeholder: `Новая задача для ${localUser.name}...`, required: true }),
+            createElement('button', { type: 'submit' }, ['Добавить Todo'])
+        ]);
+    } else {
+        form = createElement('p', {}, ['Создайте пользователя на экране "Пользователи", чтобы добавить ему задачу.']);
+    }
+
     const todoListContainer = createElement('div', { class: 'todo-list' });
 
     const handleSearchInput = (event) => {
@@ -42,7 +65,15 @@ async function renderTodos(queryString) {
         todoListContainer.innerHTML = '';
         data.forEach(todo => {
             const status = todo.completed ? 'completed' : 'pending';
-            const todoItem = createElement('div', { class: `todo-item ${status}` }, [
+            const isLocal = String(todo.userId).startsWith('local-');
+
+            const todoItem = createElement('div', { 
+                class: `todo-item ${status}`,
+                onclick: isLocal ? () => { 
+                    toggleTodoStatus(todo.userId, todo.id);
+                    handleRouting(); 
+                } : null
+            }, [
                 createElement('p', {}, [todo.title]),
                 createElement('span', {}, [status])
             ]);
@@ -54,10 +85,11 @@ async function renderTodos(queryString) {
         createElement('h1', {}, ['Все Todos']),
         searchInput
     ]));
+    appRoot.appendChild(form);
     appRoot.appendChild(todoListContainer);
     renderTodoList(todos);
 }
-
+//////////////////////////////////////////////
 async function renderPosts(queryString) {
     const params = new URLSearchParams(queryString);
     const userId = params.get('userId');
@@ -102,8 +134,7 @@ async function renderPosts(queryString) {
     appRoot.appendChild(postListContainer);
     renderPostList(posts);
 }
-
-
+//////////////////////////////////////////////
 async function renderComments(queryString) {
     const params = new URLSearchParams(queryString);
     const postId = params.get('postId');
@@ -146,15 +177,14 @@ async function renderComments(queryString) {
     appRoot.appendChild(commentListContainer);
     renderCommentList(comments);
 }
-
-
+//////////////////////////////////////////////
 const routeHandlers = {
     '#users': renderUsers,
     '#users#todos': renderTodos,
     '#users#posts': renderPosts,
     '#users#posts#comments': renderComments
 };
-
+//////////////////////////////////////////////
 function handleRouting() {
     const fullHash = window.location.hash || '#users';
     const [hash, queryString] = fullHash.split('?');
@@ -169,8 +199,7 @@ function handleRouting() {
         appRoot.innerHTML = '<h2>404</h2><p>Перейдите на <a href="#users">#users</a></p>';
     }
 }
-
-
+//////////////////////////////////////////////
 async function renderUsers(queryString) {
     const rawUsers = await fetchUsers(); 
     const allUsers = [...rawUsers, ...getLocalUsers()];
